@@ -4,7 +4,6 @@ use std::error::Error;
 use std::fs::{self,File};
 use std::io::{BufReader, Read};
 use std::os::unix::fs::MetadataExt;
-use std::path::Path;
 use sha2::{Sha256, Digest};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -30,18 +29,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
   // continue looping while we have directories to visit
   while !dirs_to_visit.is_empty() {
-    let dir = dirs_to_visit.pop_front().expect("We should always have a value here");
+    let dir = dirs_to_visit.pop_back().expect("We should always have a value here");
     println!("Searching {dir}...");
     let files = fs::read_dir(dir)?;
     // 2. for each file:
     for entry in files {
         let entry = entry?;
         let path = entry.path();
-        let path_str = path.to_str().expect("Error").to_string();
+        let path_str = path.to_str().expect("Error for converting {path} to a String").to_string();
 
         // add the directory to the stack
         if path.is_dir() {
-          dirs_to_visit.push_front(path_str.clone());
+          dirs_to_visit.push_back(path_str.clone());
         }
 
         // insert this file size into the map
