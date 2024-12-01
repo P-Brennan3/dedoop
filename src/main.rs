@@ -9,7 +9,7 @@ use sha2::{Sha256, Digest};
 fn main() -> Result<(), Box<dyn Error>> {
   let input_pattern = std::env::args().nth(1);
 
-  // 1. Get the target directory, defaulting to the OS's root dir
+  // get the target directory, defaulting to the OS's root dir
   #[cfg(windows)]
   let root = "C:\\";
 
@@ -21,6 +21,34 @@ fn main() -> Result<(), Box<dyn Error>> {
     None => root
   };
 
+  const IGNORE_FOLDERS: [&str; 25] = [
+    "node_modules",
+    "target",
+    "vendor", 
+    "dist",
+    "build",
+    ".git",
+    "venv",
+    "packages",
+    "deps",
+    "debug",
+    ".Trash",
+    "library",
+    "Library",
+    "pkg",
+    "pkgs",
+    "mod",
+    "lib",
+    "libs",
+    "env",
+    "envs",
+    "Modules",
+    "Registry",
+    ".cache",
+    "Caches",
+    "k8s.io",
+  ];
+
 
   // we need a map of the file size to the files that have it
   let mut size_files_map: HashMap<u64, Vec<String>> = HashMap::new();
@@ -30,9 +58,19 @@ fn main() -> Result<(), Box<dyn Error>> {
   // continue looping while we have directories to visit
   while !dirs_to_visit.is_empty() {
     let dir = dirs_to_visit.pop_back().expect("We should always have a value here");
-    println!("Searching {dir}...");
-    let files = fs::read_dir(dir)?;
-    // 2. for each file:
+
+    let current_dir = dir.split("/").last().unwrap();
+    if IGNORE_FOLDERS.contains(&current_dir) {
+      continue
+    }
+
+    // println!("Searching {dir}...");
+    let opened_files = fs::read_dir(dir);
+    let files = match opened_files {
+      Ok(f) => f,
+      Err(_) => continue,
+    };
+    // for each file:
     for entry in files {
         let entry = entry?;
         let path = entry.path();
@@ -44,18 +82,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         // insert this file size into the map
-        let file = File::open(&path)?;
+        let opened_file = File::open(&path);
+        let file = match opened_file {
+          Ok(f) => f,
+          Err(_) => continue,
+        };
+
         let size = file.metadata()?.size();
         size_files_map.entry(size).or_insert_with(Vec::new).push(path_str);
     }
 
   }
 
-  for (size, files) in &size_files_map {
+  for (_size, files) in &size_files_map {
     let files_count = files.len();
     let mut sha_files_map: HashMap<String, Vec<String>> = HashMap::new();
     if files_count > 1 {
-      println!("Comparing {files_count} file(s) of size {size}");
+      // println!("Comparing {files_count} file(s) of size {size}");
         
       // we need a map of the file hash to the files that have it
         for file in files {
@@ -85,8 +128,6 @@ fn hash_file(path: &String) -> io::Result<String> {
 
   // open the file 
   let file = File::open(path)?;
-  let size = file.metadata()?.size();
-  println!("{size}");
   // return with Err if the file is empty
   if file.metadata()?.len() == 0 {
     return Err(io::Error::new(
